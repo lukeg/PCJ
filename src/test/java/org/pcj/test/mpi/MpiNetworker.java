@@ -1,18 +1,22 @@
 package org.pcj.test.mpi;
 
 import org.pcj.PCJ;
+import org.pcj.internal.InternalPCJ;
 import org.pcj.internal.Networker;
 import org.pcj.internal.NetworkerInterface;
 import org.pcj.internal.message.Message;
+import org.pcj.internal.network.LoopbackSocketChannel;
 import org.pcj.internal.network.MessageBytesInputStream;
 import org.pcj.internal.network.MessageBytesOutputStream;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.Map;
 
 public class MpiNetworker implements NetworkerInterface {
     private NetworkerInterface baseNetworker;
@@ -22,6 +26,11 @@ public class MpiNetworker implements NetworkerInterface {
 
     @Override
     public void send(SocketChannel socket, Message message) {
+        if (socket instanceof LoopbackSocketChannel) {
+            baseNetworker.send(socket, message);
+            return;
+        }
+
         MessageBytesOutputStream objectBytes = null;
         try {
             objectBytes = new MessageBytesOutputStream(message);
@@ -38,7 +47,8 @@ public class MpiNetworker implements NetworkerInterface {
             subarray.get(serialized, offset, serialized.length - offset);
             offset += thisOffset;
         }
-        int physicalId = PCJ.getNodeData().getSocketChannelByPhysicalId().entrySet().stream()
+
+        int physicalId = InternalPCJ.getNodeData().getSocketChannelByPhysicalId().entrySet().stream()
                 .filter( entry -> entry.getValue() == socket)
                 .findFirst().get().getKey();
         TestMpi.sendSerializedBytes(serialized, physicalId);

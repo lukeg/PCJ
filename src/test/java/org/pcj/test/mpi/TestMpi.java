@@ -50,7 +50,7 @@ public class TestMpi implements StartPoint {
 
     public static native void sendSerializedBytes (byte[] bytes, int target);
 
-    public static native byte[] receiveSerializedBytes ();
+    public static native byte[] receiveSerializedBytes (int[] senderIdByReference);
 
     private void createNodeLeaders (boolean amIaLeader) {
         if (amIaLeader) {
@@ -59,27 +59,29 @@ public class TestMpi implements StartPoint {
     }
 
     private static class MpiCommunicator implements Runnable {
+        int[] senderId = new int[] {0};
         @Override
         public void run() {
             while (!Thread.interrupted()) {
                 if (messageReady()) {
                     System.out.format ("PCJ thread #%d found message ready for reception%n", PCJ.myId());
-                    byte[] received = receiveSerializedBytes();
+
+                    byte[] received = receiveSerializedBytes(senderId);
                     System.out.format("PCJ thread #%d received %d bytes%n", PCJ.myId(), received.length);
-                    //following call causes NPE, commentig it out - causes freeze
-                    deserializeBytesAndPutLocally(received);
+                    SocketChannel socket = InternalPCJ.getNodeData().getSocketChannelByPhysicalId().get(senderId[0]);
+                    deserializeBytesAndPutLocally(socket, received);
                 }
             }
         }
 
-        private void deserializeBytesAndPutLocally(byte[] received) {
+        private void deserializeBytesAndPutLocally(SocketChannel socket, byte[] received) {
             MessageBytesInputStream messageBytesInputStream = new MessageBytesInputStream();
             ByteBuffer receivedByteBuffer = ByteBuffer.wrap(received);
             messageBytesInputStream.offerNextBytes(receivedByteBuffer);
 
             MessageDataInputStream messageDataInputStream = messageBytesInputStream.getMessageDataInputStream();
             NetworkerInterface networker = PCJ.getNetworker();
-            networker.processMessageBytes(null, messageBytesInputStream);
+            networker.processMessageBytes(socket, messageBytesInputStream);
         }
     }
 
@@ -162,7 +164,7 @@ public class TestMpi implements StartPoint {
         "localhost:8088", "localhost:8095", "localhost", "localhost"}));*/
     }
 
-    public void initMpiSubsystem () {
+    public void initMpiSubsystem () throws InterruptedException {
         System.loadLibrary("native");
         init();
         if (PCJ.myId() == 0) {
@@ -171,11 +173,12 @@ public class TestMpi implements StartPoint {
         }
         PCJ.waitFor(Shared.mpiPort);
         establishNode0Connections(PCJ.getLocal(Shared.mpiPort));
+        nativeBarrier();
         if (amIaLeader) {
             PCJ.setNetworker(new MpiNetworker(PCJ.getNetworker()));
             spinReceiverThread();
         }
-        PCJ.barrier();
+        nativeBarrier();
     }
     @Override
     public void main() throws Throwable {
@@ -186,17 +189,15 @@ public class TestMpi implements StartPoint {
                 PCJ.myId(), PCJ.threadCount(), mpiRank(), mpiSize()));
         nativeBarrier();
 
-        //PcjThread pcjThread = PCJ.getNodeData().getPcjThread(PCJ.myId());
-        //InternalStorages storage = (InternalStorages) pcjThread.getThreadData().getStorages();
-
 
         if (PCJ.myId() == 0) {
             PCJ.put(42, 2, Shared.testValue);
         } else if (PCJ.myId() == 2) {
-            //  PCJ.waitFor(Shared.testValue);
+            PCJ.waitFor(Shared.testValue);
             System.out.format("testValue = %d\n", testValue);
         };
         nativeBarrier();
+
         finalizeMpiInfrastructure();
     }
 

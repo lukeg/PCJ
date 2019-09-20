@@ -232,7 +232,7 @@ JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_sendSerializedBytes
  * Signature: ()[B
  */
 JNIEXPORT jbyteArray JNICALL Java_org_pcj_test_mpi_TestMpi_receiveSerializedBytes
-  (JNIEnv *env, jclass) {
+  (JNIEnv *env, jclass, jintArray sender) {
     MPI_Status status;
     MPI_Probe (MPI_ANY_SOURCE, MPI_ANY_TAG, pcjCommunicator, &status);
     int length;
@@ -240,6 +240,10 @@ JNIEXPORT jbyteArray JNICALL Java_org_pcj_test_mpi_TestMpi_receiveSerializedByte
     jbyteArray returnArray = env->NewByteArray(length);
     jbyte *elements = env->GetByteArrayElements(returnArray, 0);
     MPI_Recv (elements, length, MPI_BYTE, status.MPI_SOURCE, status.MPI_TAG, pcjCommunicator, MPI_STATUS_IGNORE);
+
+    jint *senderPtr = env->GetIntArrayElements(sender, 0);
+    *senderPtr = status.MPI_SOURCE;
+    env->ReleaseIntArrayElements(sender, senderPtr, 0);
     env->ReleaseByteArrayElements(returnArray, elements, 0);
     return returnArray;
    }
