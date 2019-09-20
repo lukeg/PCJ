@@ -33,7 +33,7 @@ abstract public class Message implements Serializable {
     private Message() {
     }
 
-    Message(MessageType type) {
+    public Message(MessageType type) {
         this.type = type;
     }
 

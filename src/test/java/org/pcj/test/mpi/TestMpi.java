@@ -11,16 +11,18 @@ import org.pcj.internal.network.MessageDataInputStream;
 import org.pcj.internal.network.MessageDataOutputStream;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
 
 @RegisterStorage(TestMpi.Shared.class)
 public class TestMpi implements StartPoint {
 
-/*    private static class MpiMessageValuePutRequest  extends Message {
+    private static class MpiMessageValuePutRequest  extends Message {
 
         private int requestNum;
         private int groupId;
@@ -82,7 +84,7 @@ public class TestMpi implements StartPoint {
             }
 
         }
-    }*/
+    }
     private static class MPIStatus {
         public int count;
         public int MPI_SOURCE;
@@ -159,24 +161,6 @@ public class TestMpi implements StartPoint {
             MessageDataInputStream messageDataInputStream = messageBytesInputStream.getMessageDataInputStream();
             Networker networker = PCJ.getNetworker(); 
             networker.processMessageBytes(null, messageBytesInputStream);
-            /*Message message;
-            try {
-                byte messageType = messageDataInputStream.readByte();
-                message = MessageType.valueOf(messageType).create();
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-
-            if (LOGGER.isLoggable(Level.FINEST)) {
-                LOGGER.log(Level.FINEST, "Received message {0} from {1}", new Object[]{message.getType(), socket});
-            }
-
-            workers.submit(new Networker.WorkerTask(socket, message, messageDataInputStream));
-            NodeData nodeData = PCJ.getNodeData();
-            int globalThreadId = nodeData.getGroupById(groupId).getGlobalThreadId(threadId);
-            PcjThread pcjThread = nodeData.getPcjThread(globalThreadId);
-            InternalStorages storage = (InternalStorages) pcjThread.getThreadData().getStorages();
-*/
         }
     }
 
@@ -312,7 +296,7 @@ public class TestMpi implements StartPoint {
     }
 
     public <T> void put (T newValue, int threadId, Enum<?> variable, int... indices) {
-        MessageValuePutRequest req = new MessageValuePutRequest(0, 0, 0, PCJ.myId(),
+        MpiMessageValuePutRequest req = new MpiMessageValuePutRequest(0, 0, 0, PCJ.myId(),
                 variable.getDeclaringClass().getName(), variable.name(),
                 indices, newValue);
 
