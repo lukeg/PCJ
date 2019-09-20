@@ -17,12 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Level;
-import org.pcj.internal.Configuration;
-import org.pcj.internal.InternalCommonGroup;
-import org.pcj.internal.InternalPCJ;
-import org.pcj.internal.Networker;
-import org.pcj.internal.NodeData;
-import org.pcj.internal.NodeInfo;
+
+import org.pcj.internal.*;
 import org.pcj.internal.network.MessageDataInputStream;
 import org.pcj.internal.network.MessageDataOutputStream;
 
@@ -73,7 +69,7 @@ final public class MessageHelloInform extends Message {
         NodeData nodeData = InternalPCJ.getNodeData();
         nodeData.setPhysicalId(physicalId);
 
-        Networker networker = InternalPCJ.getNetworker();
+        NetworkerInterface networker = InternalPCJ.getNetworker();
         InternalCommonGroup globalGroup = nodeData.createGroup(0, InternalCommonGroup.GLOBAL_GROUP_ID, InternalCommonGroup.GLOBAL_GROUP_NAME);
 
         nodeData.setTotalNodeCount(nodeInfoByPhysicalId.size());

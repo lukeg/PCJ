@@ -42,7 +42,7 @@ public abstract class InternalPCJ {
 
     private static final Logger LOGGER = Logger.getLogger(InternalPCJ.class.getName());
     private static final String PCJ_VERSION;
-    private static Networker networker;
+    private static NetworkerInterface networker;
     private static NodeData nodeData;
 
 
@@ -352,9 +352,12 @@ public abstract class InternalPCJ {
         }
     }
 
-    public static Networker getNetworker() {
+    public static NetworkerInterface getNetworker() {
         return networker;
     }
+
+
+    public static void setNetworker (NetworkerInterface networker) { InternalPCJ.networker = networker; }
 
     public static NodeData getNodeData() {
         return nodeData;

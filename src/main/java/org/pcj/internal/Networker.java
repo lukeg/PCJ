@@ -38,7 +38,7 @@ import org.pcj.internal.network.SelectorProc;
  *
  * @author Marek Nowicki (faramir@mat.umk.pl)
  */
-final public class Networker {
+public class Networker implements NetworkerInterface {
 
     private static final Logger LOGGER = Logger.getLogger(Networker.class.getName());
     private final SelectorProc selectorProc;
@@ -71,33 +71,26 @@ final public class Networker {
         this.selectorProcThread.setDaemon(true);
     }
 
-    void startup() {
+    @Override
+    public void startup() {
         selectorProcThread.start();
 
     }
 
-    ServerSocketChannel bind(InetAddress hostAddress, int port, int backlog) throws IOException {
+    @Override
+    public ServerSocketChannel bind(InetAddress hostAddress, int port, int backlog) throws IOException {
         return selectorProc.bind(hostAddress, port, backlog);
     }
 
+    @Override
     public SocketChannel connectTo(InetAddress hostAddress, int port) throws IOException, InterruptedException {
         SocketChannel socket = selectorProc.connectTo(hostAddress, port);
         waitForConnectionEstablished(socket);
         return socket;
     }
 
-    private void waitForConnectionEstablished(SocketChannel socket) throws InterruptedException, IOException {
-        synchronized (socket) {
-            while (socket.isConnected() == false) {
-                if (socket.isConnectionPending() == false) {
-                    throw new IOException("Unable to connect to " + socket.getRemoteAddress());
-                }
-                socket.wait(100);
-            }
-        }
-    }
-
-    void shutdown() {
+    @Override
+    public void shutdown() {
         while (true) {
             try {
                 Thread.sleep(10);
@@ -115,6 +108,7 @@ final public class Networker {
         workers.shutdownNow();
     }
 
+    @Override
     public void send(SocketChannel socket, Message message) {
         try {
             if (socket instanceof LoopbackSocketChannel) {
@@ -141,6 +135,7 @@ final public class Networker {
         }
     }
 
+    @Override
     public void processMessageBytes(SocketChannel socket, MessageBytesInputStream messageBytes) {
         MessageDataInputStream messageDataInputStream = messageBytes.getMessageDataInputStream();
         Message message;

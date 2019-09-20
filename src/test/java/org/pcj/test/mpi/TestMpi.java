@@ -22,75 +22,6 @@ import java.util.logging.Level;
 @RegisterStorage(TestMpi.Shared.class)
 public class TestMpi implements StartPoint {
 
-    private static class MpiMessageValuePutRequest  extends Message {
-
-        private int requestNum;
-        private int groupId;
-        private int requesterThreadId;
-        private int threadId;
-        private String sharedEnumClassName;
-        private String name;
-        private int[] indices;
-        private Object newValue;
-
-        public MpiMessageValuePutRequest() {
-            super(MessageType.VALUE_PUT_REQUEST);
-        }
-
-        public MpiMessageValuePutRequest(int groupId, int requestNum, int requesterThreadId, int threadId, String storageName, String name, int[] indices, Object newValue) {
-            this();
-
-            this.groupId = groupId;
-            this.requestNum = requestNum;
-            this.requesterThreadId = requesterThreadId;
-            this.threadId = threadId;
-            this.sharedEnumClassName = storageName;
-            this.name = name;
-            this.indices = indices;
-            this.newValue = newValue;
-        }
-
-        @Override
-        public void write(MessageDataOutputStream out) throws IOException {
-            out.writeInt(groupId);
-            out.writeInt(requestNum);
-            out.writeInt(requesterThreadId);
-            out.writeInt(threadId);
-            out.writeString(sharedEnumClassName);
-            out.writeString(name);
-            out.writeIntArray(indices);
-            out.writeObject(newValue);
-        }
-
-        @Override
-        public void execute(SocketChannel sender, MessageDataInputStream in) throws IOException {
-            groupId = in.readInt();
-            requestNum = in.readInt();
-            requesterThreadId = in.readInt();
-            threadId = in.readInt();
-            sharedEnumClassName = in.readString();
-            name = in.readString();
-            indices = in.readIntArray();
-
-            NodeData nodeData = InternalPCJ.getNodeData();
-            int globalThreadId = nodeData.getGroupById(groupId).getGlobalThreadId(threadId);
-            PcjThread pcjThread = nodeData.getPcjThread(globalThreadId);
-            InternalStorages storage = (InternalStorages) pcjThread.getThreadData().getStorages();
-
-            try {
-                newValue = in.readObject();
-                storage.put(newValue, sharedEnumClassName, name, indices);
-            } catch (Exception ex) {
-            }
-
-        }
-    }
-    private static class MPIStatus {
-        public int count;
-        public int MPI_SOURCE;
-        public int MPI_TAG;
-    }
-
     public static native void init();
 
     public static native void end();
@@ -126,18 +57,6 @@ public class TestMpi implements StartPoint {
             createNodeLeadersCommunicator(amIaLeader);
         }
     }
-    enum Tags {
-        PUT_LONG_ARRAY,
-        GET_LONG_ARRAY,
-        PUT_SERIALIZED_BYTES,
-        GET_SERIALIZED_BYTES
-    }
-
-    private static final class GetPutMessageLong {
-        public int tag;
-        public int[] indices;
-        public long[] data;
-    }
 
     private static class MpiCommunicator implements Runnable {
         @Override
@@ -159,7 +78,7 @@ public class TestMpi implements StartPoint {
             messageBytesInputStream.offerNextBytes(receivedByteBuffer);
 
             MessageDataInputStream messageDataInputStream = messageBytesInputStream.getMessageDataInputStream();
-            Networker networker = PCJ.getNetworker(); 
+            NetworkerInterface networker = PCJ.getNetworker();
             networker.processMessageBytes(null, messageBytesInputStream);
         }
     }
@@ -252,7 +171,10 @@ public class TestMpi implements StartPoint {
         }
         PCJ.waitFor(Shared.mpiPort);
         establishNode0Connections(PCJ.getLocal(Shared.mpiPort));
-        spinReceiverThread();
+        if (amIaLeader) {
+            PCJ.setNetworker(new MpiNetworker(PCJ.getNetworker()));
+            spinReceiverThread();
+        }
         PCJ.barrier();
     }
     @Override
@@ -269,7 +191,7 @@ public class TestMpi implements StartPoint {
 
 
         if (PCJ.myId() == 0) {
-            put(42, 2, Shared.testValue);
+            PCJ.put(42, 2, Shared.testValue);
         } else if (PCJ.myId() == 2) {
             //  PCJ.waitFor(Shared.testValue);
             System.out.format("testValue = %d\n", testValue);
@@ -295,7 +217,7 @@ public class TestMpi implements StartPoint {
         end();
     }
 
-    public <T> void put (T newValue, int threadId, Enum<?> variable, int... indices) {
+    /*public <T> void put (T newValue, int threadId, Enum<?> variable, int... indices) {
         MpiMessageValuePutRequest req = new MpiMessageValuePutRequest(0, 0, 0, PCJ.myId(),
                 variable.getDeclaringClass().getName(), variable.name(),
                 indices, newValue);
@@ -317,6 +239,6 @@ public class TestMpi implements StartPoint {
             offset += thisOffset;
         }
         sendSerializedBytes(serialized, PCJ.getNodeData().getPhysicalId(threadId));
-    }
+    }*/
 }
 
