@@ -249,3 +249,10 @@ def createJavaExec = { String taskName ->
 }
 
 createJavaExec('run')
+ext {
+    jniHeadersLocation = "$buildDir/generated/include"
+}
+tasks.withType(JavaCompile) {
+    options.compilerArgs += ["-h",  jniHeadersLocation]
+    finalizedBy ':native:assembleRelease'
+}

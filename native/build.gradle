@@ -1,0 +1,60 @@
+plugins {
+    id 'cpp-library'
+}
+
+ext {
+    vcpgkIncludePath = 'C:/Users/lukeg/Desktop/akcesoria/vcpkg/installed/x64-windows/include'
+    vcpkgLibPath = 'C:/Users/lukeg/Desktop/akcesoria/vcpkg/installed/x64-windows/lib'
+    javaPCJHeaders = rootProject.jniHeadersLocation //"$rootProject.buildDir/generated/include"
+    javaJNIHeaders = "${System.properties.'java.home'}/include"
+}
+
+
+
+library {
+    linkage.set([Linkage.SHARED])
+}
+
+tasks.withType(CppCompile).configureEach {
+    compilerArgs.addAll toolChain.map { toolChain ->
+        if (toolChain in VisualCpp) {
+            return ["/I$vcpgkIncludePath", "/I$javaPCJHeaders", "/I$javaJNIHeaders", "/I$javaJNIHeaders/win32", "/I$javaJNIHeaders/win32/bridge"]
+        }
+        return []
+    }
+}
+
+
+tasks.withType(LinkSharedLibrary).configureEach {
+    linkerArgs.addAll toolChain.map { toolChain ->
+        if (toolChain in VisualCpp) {
+            return ["/LIBPATH:$vcpkgLibPath", "msmpi.lib"]
+        }
+        return []
+    }
+}
+
+def libraryToResources(def type) {
+    return tasks.create("libraryToResources$type") {
+        def extension = (Linkage.STATIC in library.linkage.get()) ? "lib" : "dll"
+        def input = "$buildDir/lib/main/$type/${project.name}.$extension"
+        def output = "${rootProject.projectDir}/${project.name}.$extension"
+        inputs.file input
+        outputs.file output
+        clean.delete(output)
+        doLast {
+            copy {
+                from input
+                into "${rootProject.projectDir}/"
+            }
+        }
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleRelease') {
+        task.finalizedBy libraryToResources("release")
+    } else if (task.name == 'assembleDebug') {
+        task.finalizedBy libraryToResources("debug")
+    }
+}
