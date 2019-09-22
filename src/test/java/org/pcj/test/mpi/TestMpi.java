@@ -164,6 +164,7 @@ public class TestMpi implements StartPoint {
         "localhost:8088", "localhost:8095", "localhost", "localhost"}));*/
     }
 
+    NetworkerInterface oldNetworker;
     public void initMpiSubsystem () throws InterruptedException {
         System.loadLibrary("native");
         init();
@@ -175,6 +176,7 @@ public class TestMpi implements StartPoint {
         establishNode0Connections(PCJ.getLocal(Shared.mpiPort));
         nativeBarrier();
         if (amIaLeader) {
+            oldNetworker = PCJ.getNetworker();
             PCJ.setNetworker(new MpiNetworker(PCJ.getNetworker()));
             spinReceiverThread();
         }
@@ -206,6 +208,7 @@ public class TestMpi implements StartPoint {
         if (thisThreadIsALeader()) {
             mpiBarrier();
         }
+        myNodeGroup.asyncBarrier().get();
     }
     private void finalizeMpiInfrastructure() {
         if (mpiReceiverThread.isAlive()) {
@@ -214,6 +217,9 @@ public class TestMpi implements StartPoint {
                 mpiReceiverThread.join();
             } catch (InterruptedException e) {
             }
+        }
+        if (amIaLeader) {
+            PCJ.setNetworker(oldNetworker);
         }
         end();
     }
