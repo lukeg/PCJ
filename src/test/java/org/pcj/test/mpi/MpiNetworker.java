@@ -20,7 +20,7 @@ import java.util.Map;
 
 public class MpiNetworker implements NetworkerInterface {
     private NetworkerInterface baseNetworker;
-    protected MpiNetworker(NetworkerInterface baseNetworker) {
+    public MpiNetworker(NetworkerInterface baseNetworker) {
         this.baseNetworker = baseNetworker;
     }
 
