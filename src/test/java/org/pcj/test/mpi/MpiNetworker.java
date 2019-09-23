@@ -18,6 +18,8 @@ import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.Map;
 
+import static org.pcj.PCJ.sendSerializedBytes;
+
 public class MpiNetworker implements NetworkerInterface {
     private NetworkerInterface baseNetworker;
     public MpiNetworker(NetworkerInterface baseNetworker) {
@@ -44,14 +46,14 @@ public class MpiNetworker implements NetworkerInterface {
         int offset = 0;
         for (ByteBuffer subarray : array) {
             int thisOffset = subarray.remaining();
-            subarray.get(serialized, offset, serialized.length - offset);
+            subarray.get(serialized, offset, Math.min(serialized.length - offset, thisOffset));
             offset += thisOffset;
         }
 
         int physicalId = InternalPCJ.getNodeData().getSocketChannelByPhysicalId().entrySet().stream()
                 .filter( entry -> entry.getValue() == socket)
                 .findFirst().get().getKey();
-        TestMpi.sendSerializedBytes(serialized, physicalId);
+        sendSerializedBytes(serialized, physicalId);
     }
 
     @Override

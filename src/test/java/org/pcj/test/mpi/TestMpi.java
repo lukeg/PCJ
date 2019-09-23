@@ -19,38 +19,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 
+import static org.pcj.PCJ.*;
+
 @RegisterStorage(TestMpi.Shared.class)
 public class TestMpi implements StartPoint {
-
-    public static native void init();
-
-    public static native void end();
-
-    public static native void sendInts(int src, int dest, int[] array);
-
-    public static native int[] receiveInts(int src);
-
-    public static  native String openMpiPort();
-
-    public static native void acceptConnectionAndCreateCommunicator();
-
-    public static native void connectToNode0AndCreateCommunicator(String portName);
-
-    public static native void prepareIntraCommunicator();
-
-    public static native int mpiRank();
-
-    public static native int mpiSize();
-
-    public static native void createNodeLeadersCommunicator (boolean amIaLeader);
-
-    public static native void mpiBarrier ();
-
-    public static native boolean messageReady ();
-
-    public static native void sendSerializedBytes (byte[] bytes, int target);
-
-    public static native byte[] receiveSerializedBytes (int[] senderIdByReference);
 
     private void createNodeLeaders (boolean amIaLeader) {
         if (amIaLeader) {

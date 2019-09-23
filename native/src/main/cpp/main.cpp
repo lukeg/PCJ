@@ -3,14 +3,16 @@
 #include <cstring>
 #include <mutex>
 #include <iostream>
-#include "org_pcj_test_mpi_TestMpi.h"
+#include <list>
+#include "org_pcj_PCJ.h"
 #include "mpi.h"
 
 using namespace std;
 char portName[MPI_MAX_PORT_NAME] = {};
-MPI_Comm pcjCommunicator = MPI_COMM_NULL;
+MPI_Comm pcjCommunicator = MPI_COMM_WORLD;
 MPI_Comm leaderCommunicator = MPI_COMM_NULL;
 
+std::mutex mpiMutex;
 
 //Code below comes from:
 //https://stackoverflow.com/questions/24806782/mpi-merge-multiple-intercoms-into-a-single-intracomm/31148792#31148792
@@ -41,6 +43,7 @@ MPI_Comm leaderCommunicator = MPI_COMM_NULL;
 MPI_Comm
 assimilateComm(MPI_Comm intra, MPI_Comm inter)
 {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     MPI_Comm peer = MPI_COMM_NULL;
     MPI_Comm newInterComm = MPI_COMM_NULL;
     MPI_Comm newIntraComm = MPI_COMM_NULL;
@@ -84,14 +87,20 @@ assimilateComm(MPI_Comm intra, MPI_Comm inter)
     return newIntraComm;
 }
 
-std::mutex mpiMutex;
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_init  (JNIEnv *, jclass) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_init  (JNIEnv *, jclass) {
     lock_guard<decltype(mpiMutex)> guard{mpiMutex};
-    clog << "Initializing\n";
+//    // clog << "Initializing\n";
     int status;
     MPI_Initialized (&status);
     if (!status) {
-        MPI_Init(NULL, NULL);
+//        MPI_Init(NULL, NULL);
+	int prov;
+        MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &prov);
+        std::cout << "prov = " << prov << " other vals: " << MPI_THREAD_SINGLE << " " <<
+MPI_THREAD_FUNNELED << " " <<
+MPI_THREAD_SERIALIZED << " " <<
+MPI_THREAD_MULTIPLE  << "\n";
+
     }
 }
 
@@ -100,7 +109,7 @@ JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_init  (JNIEnv *, jclass) {
  * Method:    end
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_end (JNIEnv *, jclass) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_end (JNIEnv *, jclass) {
     lock_guard<decltype(mpiMutex)> guard{mpiMutex};
 
     int status;
@@ -116,123 +125,156 @@ JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_end (JNIEnv *, jclass) {
     }
 }
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_sendInts (JNIEnv *env, jclass, jint src, jint dst, jintArray array) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_sendInts (JNIEnv *env, jclass, jint src, jint dst, jintArray array) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     jsize length = env->GetArrayLength(array);
     jint *arrayBody = env->GetIntArrayElements (array, 0);
     MPI_Send(arrayBody, length, MPI_INT, dst, 0, MPI_COMM_WORLD);
     return;
 }
 
-JNIEXPORT jintArray JNICALL Java_org_pcj_test_mpi_TestMpi_receiveInts (JNIEnv *, jclass, jint) {
+JNIEXPORT jintArray JNICALL Java_org_pcj_PCJ_receiveInts (JNIEnv *, jclass, jint) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     return NULL;
 }
 
-/*
- * Class:     org_pcj_internal_mpi_Mpi
- * Method:    messageAvailable
- * Signature: (Lorg/pcj/internal/mpi/Mpi/MPIStatus;)Z
- */
-JNIEXPORT jboolean JNICALL Java_org_pcj_test_mpi_TestMpi_messageAvailable (JNIEnv *env, jclass, jobject result) {
+JNIEXPORT jboolean JNICALL Java_org_pcj_PCJ_messageReady (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     int flag;
-    MPI_Status status;
-    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-    if (flag) {
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, pcjCommunicator, &flag, MPI_STATUS_IGNORE);
+    if (flag != 0) {
         return JNI_TRUE;
-    }   else {
-        return JNI_FALSE;
     }
+    return JNI_FALSE;
 }
 
-JNIEXPORT jstring JNICALL Java_org_pcj_test_mpi_TestMpi_openMpiPort   (JNIEnv *env, jclass) {
+JNIEXPORT jstring JNICALL Java_org_pcj_PCJ_openMpiPort   (JNIEnv *env, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     MPI_Open_port(MPI_INFO_NULL, portName);
-    std::clog << "Opening port, its name = " << portName << std::endl;
+    // clog << "Opening port, its name = " << portName << std::endl;
     jstring portJavaString = env->NewStringUTF(portName);
     pcjCommunicator = MPI_COMM_SELF;
     return portJavaString;
 }
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_acceptConnectionAndCreateCommunicator (JNIEnv *, jclass) {
-    clog << "Server: " << (pcjCommunicator == MPI_COMM_SELF) << endl;
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_acceptConnectionAndCreateCommunicator (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
+    // clog << "Server: " << (pcjCommunicator == MPI_COMM_SELF) << endl;
     MPI_Comm newInter;
-    clog << "Server started accepting\n";
+    // clog << "Server started accepting\n";
     MPI_Comm_accept (portName, MPI_INFO_NULL, 0, MPI_COMM_SELF, &newInter);
-    clog << "Server finished accepting, starting assimilation\n";
+    // clog << "Server finished accepting, starting assimilation\n";
     pcjCommunicator = assimilateComm (pcjCommunicator, newInter);
-    clog << "Server finished assimilating\n";
+    // clog << "Server finished assimilating\n";
 }
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_connectToNode0AndCreateCommunicator (JNIEnv *env, jclass, jstring port) {
-    clog << "Client: " << (pcjCommunicator == MPI_COMM_SELF) << endl;
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_connectToNode0AndCreateCommunicator (JNIEnv *env, jclass, jstring port) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
+    // clog << "Client: " << (pcjCommunicator == MPI_COMM_SELF) << endl;
     MPI_Comm newInter;
     const char *portCString = env->GetStringUTFChars(port, 0);
-        clog << "Client started connecting to " << portCString << "\n";
+        // clog << "Client started connecting to " << portCString << "\n";
     MPI_Comm_connect (portCString, MPI_INFO_NULL, 0, MPI_COMM_SELF, &newInter);
-        clog << "Client stopped connecting\n";
+        // clog << "Client stopped connecting\n";
     env->ReleaseStringUTFChars (port, portCString);
-        clog << "Client started assimilating\n";
+        // clog << "Client started assimilating\n";
     pcjCommunicator = assimilateComm(MPI_COMM_NULL, newInter);
-    clog << "Client finished assimilating\n";
+    // clog << "Client finished assimilating\n";
 }
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_prepareIntraCommunicator (JNIEnv *, jclass) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_prepareIntraCommunicator (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     pcjCommunicator = assimilateComm(pcjCommunicator, MPI_COMM_NULL);
 }
 
-JNIEXPORT jint JNICALL Java_org_pcj_test_mpi_TestMpi_mpiRank (JNIEnv *, jclass) {
+JNIEXPORT jint JNICALL Java_org_pcj_PCJ_mpiRank (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     int rank;
     MPI_Comm_rank (pcjCommunicator, &rank);
     return rank;
 }
 
-JNIEXPORT jint JNICALL Java_org_pcj_test_mpi_TestMpi_mpiSize (JNIEnv *, jclass) {
+JNIEXPORT jint JNICALL Java_org_pcj_PCJ_mpiSize (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     int size;
     MPI_Comm_size (pcjCommunicator, &size);
     return size;
 }
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_createNodeLeadersCommunicator (JNIEnv *env, jclass, jboolean amIaLeader) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_createNodeLeadersCommunicator (JNIEnv *env, jclass, jboolean amIaLeader) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     MPI_Comm_split(pcjCommunicator, amIaLeader, 0, &leaderCommunicator);
 }
 
 
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_mpiBarrier (JNIEnv *, jclass) {
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_mpiBarrier (JNIEnv *, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    clog << "Before barrier (rank = ) " << rank << "\n";
+    // clog << "Before barrier (rank = ) " << rank << "\n";
     MPI_Barrier(pcjCommunicator);
-    clog << "After barrier (rank = ) " << rank << "\n";
+    // clog << "After barrier (rank = ) " << rank << "\n";
 }
 
 
 
-JNIEXPORT jboolean JNICALL Java_org_pcj_test_mpi_TestMpi_messageReady (JNIEnv *, jclass) {
-    int flag;
-    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, pcjCommunicator, &flag, MPI_STATUS_IGNORE);
-    if (flag != 0) {
-        clog << "Found message ready for reception\n";
-    }
-    return flag != 0;
-}
 
 
+class SentInformation {
+private:
+	JNIEnv *env;
+	jbyteArray backingArray;
+	jbyte *elements;
+	int length;
+	MPI_Request *request;
+public:
+	SentInformation (JNIEnv *env, jbyteArray &backingArray, jbyte* elements, int length, MPI_Request *request) :
+		env(env), backingArray(backingArray), elements(elements), length(length), request(request) {}
+	~SentInformation () {
+		delete request;
+    	//env->ReleaseByteArrayElements(backingArray, elements, 0);
+    	env->DeleteGlobalRef(backingArray);
+	}
+	MPI_Request* getRequest () const {
+		return request;
+	}
+};
 
-JNIEXPORT void JNICALL Java_org_pcj_test_mpi_TestMpi_sendSerializedBytes
+list<SentInformation> sentRequests;
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_sendSerializedBytes
   (JNIEnv *env, jclass, jbyteArray toSend, jint targetNode) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     int length = env->GetArrayLength(toSend);
-    jbyte *elements = env->GetByteArrayElements(toSend, 0);
-    MPI_Send(elements, length, MPI_BYTE, targetNode, 0, pcjCommunicator);
-    env->ReleaseByteArrayElements(toSend, elements, 0);
-    clog << "Sent " << length << " bytes to node " << targetNode << "\n";
+    jbyteArray persistentArray = (jbyteArray)env->NewGlobalRef(toSend);
+    jbyte *elements = env->GetByteArrayElements(persistentArray, 0);
+    MPI_Request *request = new MPI_Request;
+    MPI_Isend(elements, length, MPI_BYTE, targetNode, 0, pcjCommunicator, request);
+    sentRequests.emplace_back(env, persistentArray, elements, length, request);
+    // clog << "Sent " << length << " bytes to node " << targetNode << "\n";
   }
 
+void Java_org_pcj_PCJ_testExistingRequests (JNIEnv *env, jclass) {
+    auto info = sentRequests.begin();
+	while (info != sentRequests.end()) {
+		auto request = info->getRequest();
+		int flag;
+		MPI_Test (request, &flag, MPI_STATUS_IGNORE);
+		if (flag) {
+			info = sentRequests.erase(info);
+		} else {
+		    info++;
+		}
+	}	
+}
 /*
- * Class:     org_pcj_test_mpi_TestMpi
+ * Class:     org_pcj_PCJ
  * Method:    receiveSerializedBytes
  * Signature: ()[B
  */
-JNIEXPORT jbyteArray JNICALL Java_org_pcj_test_mpi_TestMpi_receiveSerializedBytes
+JNIEXPORT jbyteArray JNICALL Java_org_pcj_PCJ_receiveSerializedBytes
   (JNIEnv *env, jclass, jintArray sender) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     MPI_Status status;
     MPI_Probe (MPI_ANY_SOURCE, MPI_ANY_TAG, pcjCommunicator, &status);
     int length;
@@ -247,3 +289,8 @@ JNIEXPORT jbyteArray JNICALL Java_org_pcj_test_mpi_TestMpi_receiveSerializedByte
     env->ReleaseByteArrayElements(returnArray, elements, 0);
     return returnArray;
    }
+
+JNIEXPORT void JNICALL Java_org_pcj_PCJ_renumberProcessForPCJ (JNIEnv *env, jclass, jint pcjRank) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
+    MPI_Comm_split(MPI_COMM_WORLD, 0, pcjRank, &pcjCommunicator);
+}

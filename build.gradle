@@ -36,8 +36,9 @@ compileJava {
     description 'Compiling java classes using Java 8'
 
     options.compilerArgs = [
-            '-source', '1.8',
-            '-target', '1.8',
+       //     '-source', '1.8',
+         //   '-target', '1.8',
+            '--release', '8',
             '-profile', 'compact3',
             '-Xlint:unchecked'
     ]
@@ -46,7 +47,13 @@ compileJava {
 compileTestJava {
     group 'build'
     description 'Compiles java test classes using Java 8 disabling StorageAnnotationProcessor'
-
+    options.compilerArgs = [
+            //     '-source', '1.8',
+            //   '-target', '1.8',
+            '--release', '8',
+            '-profile', 'compact3',
+            '-Xlint:unchecked'
+    ]
     options.compilerArgs += '-proc:none' // 'org.pcj.internal.StorageAnnotationProcessor'
 }
 

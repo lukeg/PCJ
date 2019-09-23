@@ -494,4 +494,42 @@ final public class PCJ extends InternalPCJ {
         int myThreadId = getGlobalGroup().myId();
         return (Group) InternalPCJ.join(myThreadId, name);
     }
+
+
+    /* MPI prototyping starts around... here */
+
+
+    public static native void init();
+
+    public static native void end();
+
+    public static native void sendInts(int src, int dest, int[] array);
+
+    public static native int[] receiveInts(int src);
+
+    public static native void renumberProcessForPCJ(int myPCJRank);
+
+    public static  native String openMpiPort();
+
+    public static native void acceptConnectionAndCreateCommunicator();
+
+    public static native void connectToNode0AndCreateCommunicator(String portName);
+
+    public static native void prepareIntraCommunicator();
+
+    public static native int mpiRank();
+
+    public static native int mpiSize();
+
+    public static native void createNodeLeadersCommunicator (boolean amIaLeader);
+
+    public static native void mpiBarrier ();
+
+    public static native boolean messageReady ();
+
+    public static native void sendSerializedBytes (byte[] bytes, int target);
+
+    public static native byte[] receiveSerializedBytes (int[] senderIdByReference);
+
+    public static native void testExistingRequests ();
 }
