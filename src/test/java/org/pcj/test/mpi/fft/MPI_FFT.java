@@ -52,15 +52,15 @@ public class MPI_FFT implements StartPoint {
         int[] senderId = new int[] {0};
         @Override
         public void run() {
-            System.out.println("Thread runnin'");
+            //System.out.println("Thread runnin'");
             mpiBarrier();
             while (!Thread.interrupted()) {
                 testExistingRequests();
                 if (messageReady()) {
-                    System.out.format ("PCJ thread #%d found message ready for reception%n", PCJ.myId());
+              //      System.out.format ("PCJ thread #%d found message ready for reception%n", PCJ.myId());
 
                     byte[] received = receiveSerializedBytes(senderId);
-                    System.out.format("PCJ thread #%d received %d bytes%n", PCJ.myId(), received.length);
+                //    System.out.format("PCJ thread #%d received %d bytes%n", PCJ.myId(), received.length);
                     SocketChannel socket = InternalPCJ.getNodeData().getSocketChannelByPhysicalId().get(senderId[0]);
                     deserializeBytesAndPutLocally(socket, received);
                 }
@@ -112,10 +112,10 @@ public class MPI_FFT implements StartPoint {
 
     public void establishNode0Connections(String portName) {
         Map<Integer, Integer> leaders = findLeadersOfNodes();
-        if (PCJ.myId() == 0)
-            for (int key : leaders.keySet()) {
-                System.out.println(key + " " + leaders.get(key));
-            }
+//        if (PCJ.myId() == 0)
+  //          for (int key : leaders.keySet()) {
+    //            System.out.println(key + " " + leaders.get(key));
+      //      }
         for (int node = 1; node < leaders.size(); node++) {
             if (PCJ.myId() == 0) {
                 acceptConnectionAndCreateCommunicator();
@@ -151,9 +151,13 @@ public class MPI_FFT implements StartPoint {
 
     NetworkerInterface oldNetworker;
     public void initMpiSubsystem (boolean selfStart) throws InterruptedException {
-        System.loadLibrary("native");
+        if (thisThreadIsALeader()) {
+            System.loadLibrary("native");
+        }
         PCJ.barrier();
-        init();
+        if (thisThreadIsALeader()) {
+            init();
+        }
         PCJ.barrier();
         if (selfStart == true) {
             if (PCJ.myId() == 0) {
@@ -179,17 +183,17 @@ public class MPI_FFT implements StartPoint {
             PCJ.setNetworker(new MpiNetworker(PCJ.getNetworker()));
             spinReceiverThread();
         }
-        PCJ.barrier(); //nativeBarrier();
+        nativeBarrier();
     }
     @Override
     public void main() throws Throwable {
-        System.out.format("Logical thread# = %d, node id = %d physical id = %d\n",
-                PCJ.myId(), PCJ.getNodeId(), PCJ.getNodeData().getPhysicalId());
+ //       System.out.format("Logical thread# = %d, node id = %d physical id = %d\n",
+   //             PCJ.myId(), PCJ.getNodeId(), PCJ.getNodeData().getPhysicalId());
         initMpiSubsystem(false);
-        System.out.println(String.format("I am PCJ thread %d of %d. In MPI I am thread %d of %d.",
-                PCJ.myId(), PCJ.threadCount(), mpiRank(), mpiSize()));
+     //   System.out.println(String.format("I am PCJ thread %d of %d. In MPI I am thread %d of %d.",
+       //         PCJ.myId(), PCJ.threadCount(), mpiRank(), mpiSize()));
         PCJ.barrier(); //nativeBarrier();
-        System.out.println(PCJ.myId() + " finished init");
+    //    System.out.println(PCJ.myId() + " finished init");
         world_size = PCJ.threadCount();
         world_logsize = Utilities.number_of_bits(world_size) - 1L;
         rank = PCJ.myId();
@@ -210,17 +214,17 @@ public class MPI_FFT implements StartPoint {
         long t_all_old = Long.MAX_VALUE;
         for (int i = 0; i < 2; i++) {
             PCJ.barrier();
-            System.out.println(PCJ.myId() + " starting fft init");
+       //     System.out.println(PCJ.myId() + " starting fft init");
 
             fft_init(local_size, mystart, rank);
-            System.out.println(PCJ.myId() + " stopped fft init");
+         //   System.out.println(PCJ.myId() + " stopped fft init");
 
             tstart = System.nanoTime();
             debug2 = "c";
-            System.out.println(PCJ.myId() + " starting fft inner");
+           // System.out.println(PCJ.myId() + " starting fft inner");
 
             fft_inner(local_size, 1L);
-            System.out.println(PCJ.myId() + " stopped fft inner");
+            //System.out.println(PCJ.myId() + " stopped fft inner");
 
             tend = System.nanoTime();
             PCJ.barrier();
@@ -255,7 +259,7 @@ public class MPI_FFT implements StartPoint {
             tsec = (time) * 1e-9;
 
             gflops = ((5.0d * n * two_n) / tsec) * 1e-9;
-            System.out.println("Elapsed time:" + tsec + " Num PEs " + +world_size + " Local size: " + local_size + " GFlops = " + gflops + " communication = " + communication + " Alltoall time = " + t_all_old * 1e-9);
+            System.out.println("Elapsed time:" + tsec + " Num PEs " + +world_size + "nodes " + PCJ.getNodeCount() +" Local size: " + local_size + " GFlops = " + gflops + " communication = " + communication + " Alltoall time = " + t_all_old * 1e-9);
         }
         //       PCJ.log("#" + PCJ.myId() + " Alltoall time = " + t_all_old * 1e-9);
         System.err.flush();
@@ -264,7 +268,7 @@ public class MPI_FFT implements StartPoint {
 
         //let's be brutal...
         System.exit(0);
-        finalizeMpiInfrastructure();
+      //  finalizeMpiInfrastructure();
     }
 
     public void nativeBarrier() {
@@ -274,18 +278,22 @@ public class MPI_FFT implements StartPoint {
         }
         myNodeGroup.asyncBarrier().get();
     }
-    private void finalizeMpiInfrastructure() {
-        if (mpiReceiverThread.isAlive()) {
-            mpiReceiverThread.interrupt();
-            try {
-                mpiReceiverThread.join();
-            } catch (InterruptedException e) {
+    private void finalizeMpiInfrastructure() throws InterruptedException {
+        PCJ.barrier();
+        if (thisThreadIsALeader()) {
+            setNetworker(oldNetworker);
+            if (mpiReceiverThread.isAlive()) {
+                mpiReceiverThread.interrupt();
+                try {
+                    mpiReceiverThread.join();
+                } catch (InterruptedException e) {
+                }
             }
+            end();
+        } else {
+            mpiReceiverThread.join();
         }
-        if (amIaLeader) {
-            PCJ.setNetworker(oldNetworker);
-        }
-        end();
+        PCJ.barrier();
     }
 
 
@@ -449,12 +457,12 @@ public class MPI_FFT implements StartPoint {
             }
         }
 
-        System.out.println(PCJ.myId() + " starts transpose1");
+        //System.out.println(PCJ.myId() + " starts transpose1");
 
         t1 = System.nanoTime();
         transpose(c, n_world_size, world_size, spare, true);
         t2 = System.nanoTime();
-        System.out.println(PCJ.myId() + " stops transpose1");
+        //System.out.println(PCJ.myId() + " stops transpose1");
 
         tt += t2 - t1;
 
@@ -485,12 +493,12 @@ public class MPI_FFT implements StartPoint {
                 }
             }
         }
-        System.out.println(PCJ.myId() + " starts transpose2");
+    //    System.out.println(PCJ.myId() + " starts transpose2");
 
         t1 = System.nanoTime();
         transpose(c, n_world_size, n_local_size / world_size, spare, false);
         t2 = System.nanoTime();
-        System.out.println(PCJ.myId() + " stops transpose2");
+      //  System.out.println(PCJ.myId() + " stops transpose2");
 
         tt += t2 - t1;
     }

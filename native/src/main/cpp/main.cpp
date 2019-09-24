@@ -231,11 +231,16 @@ private:
 public:
 	SentInformation (JNIEnv *env, jbyteArray &backingArray, jbyte* elements, int length, MPI_Request *request) :
 		env(env), backingArray(backingArray), elements(elements), length(length), request(request) {}
-	~SentInformation () {
+	void performDeletion (JNIEnv *env) {
+		delete request;
+    	env->DeleteGlobalRef(backingArray);
+    	env->ReleaseByteArrayElements(backingArray, elements, 0);
+	}
+/*	~SentInformation () {
 		delete request;
     	//env->ReleaseByteArrayElements(backingArray, elements, 0);
     	env->DeleteGlobalRef(backingArray);
-	}
+	}*/
 	MPI_Request* getRequest () const {
 		return request;
 	}
@@ -255,12 +260,15 @@ JNIEXPORT void JNICALL Java_org_pcj_PCJ_sendSerializedBytes
   }
 
 void Java_org_pcj_PCJ_testExistingRequests (JNIEnv *env, jclass) {
+    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
+
     auto info = sentRequests.begin();
 	while (info != sentRequests.end()) {
 		auto request = info->getRequest();
 		int flag;
 		MPI_Test (request, &flag, MPI_STATUS_IGNORE);
 		if (flag) {
+			info->performDeletion(env);
 			info = sentRequests.erase(info);
 		} else {
 		    info++;
