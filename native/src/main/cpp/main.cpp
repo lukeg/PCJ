@@ -43,7 +43,6 @@ std::mutex mpiMutex;
 MPI_Comm
 assimilateComm(MPI_Comm intra, MPI_Comm inter)
 {
-    lock_guard<decltype(mpiMutex)> guard{mpiMutex};
     MPI_Comm peer = MPI_COMM_NULL;
     MPI_Comm newInterComm = MPI_COMM_NULL;
     MPI_Comm newIntraComm = MPI_COMM_NULL;
@@ -89,7 +88,7 @@ assimilateComm(MPI_Comm intra, MPI_Comm inter)
 
 JNIEXPORT void JNICALL Java_org_pcj_PCJ_init  (JNIEnv *, jclass) {
     lock_guard<decltype(mpiMutex)> guard{mpiMutex};
-//    // clog << "Initializing\n";
+     clog << "Initializing\n";
     int status;
     MPI_Initialized (&status);
     if (!status) {
@@ -223,14 +222,13 @@ JNIEXPORT void JNICALL Java_org_pcj_PCJ_mpiBarrier (JNIEnv *, jclass) {
 
 class SentInformation {
 private:
-	JNIEnv *env;
 	jbyteArray backingArray;
 	jbyte *elements;
 	int length;
 	MPI_Request *request;
 public:
-	SentInformation (JNIEnv *env, jbyteArray &backingArray, jbyte* elements, int length, MPI_Request *request) :
-		env(env), backingArray(backingArray), elements(elements), length(length), request(request) {}
+	SentInformation (jbyteArray &backingArray, jbyte* elements, int length, MPI_Request *request) :
+		backingArray(backingArray), elements(elements), length(length), request(request) {}
 	void performDeletion (JNIEnv *env) {
 		delete request;
     	env->DeleteGlobalRef(backingArray);
@@ -255,7 +253,7 @@ JNIEXPORT void JNICALL Java_org_pcj_PCJ_sendSerializedBytes
     jbyte *elements = env->GetByteArrayElements(persistentArray, 0);
     MPI_Request *request = new MPI_Request;
     MPI_Isend(elements, length, MPI_BYTE, targetNode, 0, pcjCommunicator, request);
-    sentRequests.emplace_back(env, persistentArray, elements, length, request);
+    sentRequests.emplace_back(persistentArray, elements, length, request);
     // clog << "Sent " << length << " bytes to node " << targetNode << "\n";
   }
 
